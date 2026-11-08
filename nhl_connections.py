@@ -19,6 +19,7 @@ import unicodedata
 import time
 import sys
 import argparse
+import random
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -274,7 +275,7 @@ def bfs_all_paths(
         if node == src:
             paths.append(path[::-1])
             return
-        for parent in parents[node]:
+        for parent in random.sample(list(parents[node]), len(parents[node])):
             path.append(parent)
             _dfs(parent, path)
             path.pop()

@@ -101,13 +101,6 @@
     .btn-primary { background: var(--accent); color: #ffffff; width: 100%; margin-top: .3rem; }
     .btn-primary:hover:not(:disabled) { opacity: .88; }
 
-    .examples { margin-top: 1.1rem; font-size: .8rem; color: var(--muted); text-align: center; }
-    .examples span { margin-right: .4rem; }
-    .example-link {
-      background: none; border: none; color: var(--accent);
-      cursor: pointer; font-size: .8rem; text-decoration: underline; padding: 0;
-    }
-    .example-link:hover { opacity: .8; }
 
     /* ── Status ── */
     #status {
@@ -211,12 +204,6 @@
       </div>
     </div>
     <button class="btn btn-primary" id="find-btn" disabled>Find Connection</button>
-  </div>
-  <div class="examples">
-    <span>Try:</span>
-    <button class="example-link" data-p1="Wayne Gretzky" data-p2="Joe Malone">Gretzky → Malone</button>
-    &nbsp;·&nbsp;
-    <button class="example-link" data-p1="Connor McDavid" data-p2="Ernie Parkes">McDavid → Ernie Parkes</button>
   </div>
 </div>
 
@@ -596,28 +583,6 @@ function updateFindBtn() {
   findBtn.disabled = !(document.getElementById('p1-id').value &&
                        document.getElementById('p2-id').value);
 }
-
-// ── Example links ─────────────────────────────────────────────────────────────
-
-document.querySelectorAll('.example-link').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    async function resolveFirst(name, textId, hiddenId) {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(name)}`);
-      const players = await r.json();
-      if (players.length) {
-        document.getElementById(textId).value = players[0].name;
-        document.getElementById(textId).classList.add('selected');
-        document.getElementById(hiddenId).value = players[0].id;
-      }
-    }
-    await Promise.all([
-      resolveFirst(btn.dataset.p1, 'p1-text', 'p1-id'),
-      resolveFirst(btn.dataset.p2, 'p2-text', 'p2-id'),
-    ]);
-    updateFindBtn();
-    if (!findBtn.disabled) findBtn.click();
-  });
-});
 
 // ── Path search ───────────────────────────────────────────────────────────────
 

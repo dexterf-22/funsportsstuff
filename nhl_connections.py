@@ -283,6 +283,98 @@ def bfs_all_paths(
     return paths, hop_count, total_count
 
 
+def _bfs_distances(adjacency: dict, src: int) -> dict:
+    """BFS from src; returns dist dict (no parent tracking)."""
+    dist = {src: 0}
+    queue = deque([src])
+    while queue:
+        node = queue.popleft()
+        d = dist[node] + 1
+        for nbr in adjacency[node]:
+            if nbr not in dist:
+                dist[nbr] = d
+                queue.append(nbr)
+    return dist
+
+
+def _bfs_path(adjacency: dict, src: int, dst: int) -> list[int]:
+    """BFS from src to dst; returns the path as a list of player IDs."""
+    if src == dst:
+        return [src]
+    parent = {src: None}
+    queue = deque([src])
+    while queue:
+        node = queue.popleft()
+        for nbr in adjacency[node]:
+            if nbr not in parent:
+                parent[nbr] = node
+                if nbr == dst:
+                    path = []
+                    cur = dst
+                    while cur is not None:
+                        path.append(cur)
+                        cur = parent[cur]
+                    return path[::-1]
+                queue.append(nbr)
+    return []
+
+
+def find_diameter(adjacency: dict) -> tuple:
+    """
+    Exact graph diameter via full BFS from every node in the main connected
+    component.  Returns (max_dist, src_id, dst_id).
+    Path reconstruction is left to the caller (call _bfs_path separately).
+    """
+    # Identify connected components
+    visited: set[int] = set()
+    components: list[set] = []
+    for start in adjacency:
+        if start not in visited:
+            comp: set[int] = set()
+            q: deque = deque([start])
+            visited.add(start)
+            while q:
+                n = q.popleft()
+                comp.add(n)
+                for nb in adjacency[n]:
+                    if nb not in visited:
+                        visited.add(nb)
+                        q.append(nb)
+            components.append(comp)
+
+    main_comp = max(components, key=len)
+    isolated  = sum(1 for c in components if len(c) == 1)
+    print(f"Main connected component: {len(main_comp):,} players  "
+          f"({len(components) - 1} other component(s), {isolated} isolated)")
+
+    nodes = list(main_comp)
+    total = len(nodes)
+
+    # Double-BFS warm-up: quick lower bound
+    seed = nodes[0]
+    d1   = _bfs_distances(adjacency, seed)
+    u    = max(main_comp, key=lambda x: d1.get(x, 0))
+    d2   = _bfs_distances(adjacency, u)
+    v    = max(main_comp, key=lambda x: d2.get(x, 0))
+    best_dist = d2[v]
+    best_src, best_dst = u, v
+    print(f"Double-BFS lower bound: {best_dist}  ({best_src} → {best_dst})")
+    print(f"Running full scan ({total:,} BFS calls)…", flush=True)
+
+    for i, src in enumerate(nodes):
+        if i % 1000 == 0 and i:
+            pct = 100 * i // total
+            print(f"  {i:,}/{total:,} ({pct}%)  current max={best_dist}", flush=True)
+        dist = _bfs_distances(adjacency, src)
+        far  = max(main_comp, key=lambda x: dist.get(x, 0))
+        d    = dist[far]
+        if d > best_dist:
+            best_dist = d
+            best_src, best_dst = src, far
+
+    return best_dist, best_src, best_dst
+
+
 def bfs_history(
     adjacency: dict, earliest: dict, start: int, max_hops: int = 15
 ) -> list[tuple]:
@@ -475,6 +567,20 @@ def cmd_path(args, conn):
         print_path(conn, paths[0])
 
 
+def cmd_diameter(args, conn):
+    adjacency, _ = build_graph(conn)
+
+    max_dist, src_id, dst_id = find_diameter(adjacency)
+
+    src_name = _player_name(conn, src_id)
+    dst_name = _player_name(conn, dst_id)
+    print(f"\nGraph diameter: {max_dist} hops")
+    print(f"  {src_name}  →  {dst_name}\n")
+
+    path = _bfs_path(adjacency, src_id, dst_id)
+    print_path(conn, path)
+
+
 def cmd_history(args, conn):
     adjacency, earliest = build_graph(conn)
 
@@ -540,14 +646,18 @@ def main():
     ph.add_argument("--max-hops", type=int, default=12,
                     help="Maximum chain length to explore (default: 12)")
 
+    # diameter
+    sub.add_parser("diameter", help="Find the two players with the longest shortest connection path")
+
     args = parser.parse_args()
     conn = open_db()
 
     dispatch = {
-        "fetch":   cmd_fetch,
-        "search":  cmd_search,
-        "path":    cmd_path,
-        "history": cmd_history,
+        "fetch":    cmd_fetch,
+        "search":   cmd_search,
+        "path":     cmd_path,
+        "history":  cmd_history,
+        "diameter": cmd_diameter,
     }
     dispatch[args.command](args, conn)
     conn.close()
